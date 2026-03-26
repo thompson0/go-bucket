@@ -1,20 +1,58 @@
 package main
 
 import (
-    "fmt"
+	"fmt"
+	"strings"
+	"go-bucket/buckets"
 )
 
 func main() {
-    url := "https://meu-bucket-exemplo.s3.amazonaws.com/"
+	var url string
+	fmt.Println("Digite o nome do site que deseja buscar o Bucket")
+	fmt.Scan(&url)
 
-    result := CheckBucket(url)
+	FormataUrl(url)
+	
+
+    result := buckets.CheckBucket(url, true)
 
     if result.Err != nil {
         fmt.Println("Erro:", result.Err)
         return
     }
 
-    fmt.Println("Existe:", result.Exists)
+    fmt.Println("Existe:", result.Exist)
     fmt.Println("Publico:", result.Public)
     fmt.Println("Status:", result.StatusCode)
+
+}
+
+func FormataUrl(input string) string {
+	input = strings.TrimSpace(input)
+
+	if strings.Contains(input, ".s3.amazonaws.com") {
+		return input
+	}
+
+	if !strings.HasPrefix(input, "http://") && !strings.HasPrefix(input, "https://") {
+		input = "http://" + input
+	}
+
+	u, err := url.Parse(input)
+	if err != nil {
+		
+		return fmt.Sprintf("https://%s.s3.amazonaws.com/", input)
+	}
+
+	host := u.Hostname() 
+
+	parts := strings.Split(host, ".")
+
+	if len(parts) >= 2 {
+		name := parts[len(parts)-2]
+		return fmt.Sprintf("https://%s.s3.amazonaws.com/", name)
+	}
+
+	// fallback
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/", host)
 }
