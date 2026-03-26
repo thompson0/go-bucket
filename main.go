@@ -48,11 +48,6 @@ func FormataUrl(input string) string {
 
 	parts := strings.Split(host, ".")
 
-	if len(parts) >= 2 {
-		name := parts[len(parts)-2]
-		return fmt.Sprintf("https://%s.s3.amazonaws.com/", name)
-	}
-
 	// fallback
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/", host)
 }
