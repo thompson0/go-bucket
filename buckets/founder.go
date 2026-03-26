@@ -1,30 +1,48 @@
-package founder
+package buckets
 
-import {
+import (
+	"io"
 	"net/http"
 	"time"
-}
+)
 
 type BucketTest struct {
-	Exist 	bool
-	Public  bool
+	Exist      bool
+	Public     bool
 	StatusCode int
-	Err 	error
-	Region string
+	Err        error
+	Region     string
+	Response   string 
 }
 
-func CheckBucket(url string) BucketResult {
+func CheckBucket(url string, debug bool) BucketTest {
 	client := http.Client{
-		Timeout: 5* time.second,
+		Timeout: 5 * time.Second,
 	}
-	resp, err := client.Get(url)
+
+	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
-		return BucketResult(Err: err)
+		return BucketTest{Err: err}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return BucketTest{Err: err}
 	}
 	defer resp.Body.Close()
 
-	result := BucketResult{
+	result := BucketTest{
 		StatusCode: resp.StatusCode,
+	}
+
+	region := resp.Header.Get("x-amz-bucket-region")
+	if region != "" {
+		result.Region = region
+	}
+
+	if debug {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		result.Response = string(bodyBytes)
 	}
 
 	switch resp.StatusCode {
@@ -32,14 +50,15 @@ func CheckBucket(url string) BucketResult {
 		result.Exist = true
 		result.Public = true
 	case 403:
-		result.Exist = false
+		result.Exist = true 
 		result.Public = false
 	case 404:
 		result.Exist = false
-		result.Public = false
-	case 301
+	case 301:
 		result.Exist = true
-		result.Region = "Provalvelmente está localizado em outra região"
+	default:
+		
 	}
+
 	return result
 }
