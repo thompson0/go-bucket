@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"net/url"
 	"go-bucket/buckets"
 )
 
@@ -11,9 +12,7 @@ func main() {
 	fmt.Println("Digite o nome do site que deseja buscar o Bucket")
 	fmt.Scan(&url)
 
-	FormataUrl(url)
-	
-
+	url  = FormataUrl(url)
     result := buckets.CheckBucket(url, true)
 
     if result.Err != nil {
@@ -44,10 +43,6 @@ func FormataUrl(input string) string {
 		return fmt.Sprintf("https://%s.s3.amazonaws.com/", input)
 	}
 
-	host := u.Hostname() 
-
-	parts := strings.Split(host, ".")
-
 	// fallback
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/", host)
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/", u.Host)
 }
