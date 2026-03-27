@@ -1,7 +1,7 @@
 package buckets
 
 import (
-	"io"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -22,11 +22,17 @@ func CheckBucket(url string, debug bool) BucketTest {
 
 	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
+		if debug {
+			fmt.Printf("[DEBUG] %s | Error: %v\n", url, err)
+		}
 		return BucketTest{Err: err}
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
+		if debug {
+			fmt.Printf("[DEBUG] %s | Error: %v\n", url, err)
+		}
 		return BucketTest{Err: err}
 	}
 	defer resp.Body.Close()
@@ -38,11 +44,6 @@ func CheckBucket(url string, debug bool) BucketTest {
 	region := resp.Header.Get("x-amz-bucket-region")
 	if region != "" {
 		result.Region = region
-	}
-
-	if debug {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		result.Response = string(bodyBytes)
 	}
 
 	switch resp.StatusCode {
@@ -58,6 +59,11 @@ func CheckBucket(url string, debug bool) BucketTest {
 		result.Exist = true
 	default:
 		
+	}
+
+	if debug == true {
+		fmt.Printf("[DEBUG] %s | Status: %d | Region: %s | Exist: %v | Public: %v\n", 
+			url, resp.StatusCode, region, result.Exist, result.Public)
 	}
 
 	return result

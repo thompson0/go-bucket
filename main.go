@@ -5,15 +5,36 @@ import (
 	"strings"
 	"net/url"
 	"go-bucket/buckets"
+	"flag"
 )
 
 func main() {
 	var url string
+	var bruteforce string
+	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
+	var alvo = flag.String("u", "", "URL alvo para buscar")
+	var wordlist = flag.String("w", "", "Caminho da wordlist")
+	var threads = flag.Int("t", 1, "Número de threads")
+	var timeout = flag.Int("timeout", 30, "Timeout em segundos")
+	var output = flag.String("output", "", "Arquivo de saída para resultados")
+	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
+	flag.Parse()
+
+	if  *stopOnFound {
+		fmt.Println("Modo stop ativado")
+	}
+
+	if *alvo != "" && *wordlist != "" {
+		alvo := FormataUrl(*alvo)
+		buckets.Brute(alvo, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+		return
+	}
+
 	fmt.Println("Digite o nome do site que deseja buscar o Bucket")
 	fmt.Scan(&url)
 
 	url  = FormataUrl(url)
-    result := buckets.CheckBucket(url, true)
+    result := buckets.CheckBucket(url, *debug)
 
     if result.Err != nil {
         fmt.Println("Erro:", result.Err)
@@ -23,6 +44,17 @@ func main() {
     fmt.Println("Existe:", result.Exist)
     fmt.Println("Publico:", result.Public)
     fmt.Println("Status:", result.StatusCode)
+
+	if result.Exist == false{
+		fmt.Println("Bucket não encontrado deseja tentar um bruteforce com nomes parecidos? [S/n]")
+		fmt.Scan(&bruteforce)
+
+		if strings.ToLower(bruteforce) == "s" {
+			buckets.Brute(url, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+		}
+		
+
+	}
 
 }
 
