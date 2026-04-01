@@ -7,11 +7,15 @@ import (
 	"net/url"
 	"go-bucket/buckets"
 	"go-bucket/db"
+	"go-bucket/draw"
 	"flag"
 	"os"
 )
 
 func main() {
+
+	draw.BucketDraw()
+
 	var bruteforce string
 	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
 	var alvo = flag.String("u", "", "URL alvo para buscar")
