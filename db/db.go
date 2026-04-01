@@ -1,55 +1,51 @@
 package db
 
 import (
-	"database/sql"
-	"github.com/mattn/go-sqlite3"
+	"sync"
 )
 
+type BucketTest struct {
+	Exist      bool
+	Public     bool
+	StatusCode int
+	Region     string
+}
 
-func Init() (*sql_DB, error){
-	db,err := sql.Open("sqlite3", "../buckets.db")
-	if err != nil {
-		return nil, err
+type Store struct {
+	mu      sync.RWMutex
+	buckets map[string]BucketTest
+}
+
+func Init() (*Store, error) {
+	store := &Store{
+		buckets: make(map[string]BucketTest),
 	}
 
-
-	query := `
-	CREATE TABLE IF NOT EXISTS buckets (
-		url TEXT PRIMARY KEY,
-		exist BOOLEAN,
-		public BOOLEAN,
-		status INTEGER,
-		region TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-	`
-	_,err = db.Exec(query)
-	return db, err
+	return store, nil
 }
 
-func Save(db *sql.DB, url string ,result BucketTest){
-	query := `
-	INSERT OR REPLACE INTO buckets (url, exist, public, status, region)
-	VALUES (?, ?, ?, ?, ?)
-	`
+func Save(store *Store, url string, result BucketTest) {
+	if store == nil {
+		return
+	}
 
-	db.Exec(query,url,result.Exist, result.Public, result.StatusCode, result.Region)
+	store.mu.Lock()
+	store.buckets[url] = result
+	store.mu.Unlock()
 }
 
-func Get(db *sql_DB,url string) (BucketTest,bool){
-	query := `
-	SELECT exist, public, status, region
-	FROM buckets
-	WHERE url = ?
-	`
-
-	row := db.QueryRow(query,url)
-
-	var res BucketTest
-	err := row.Scan(&res.Exist, &res.Public, &res.StatusCode, &res.Region)
-
-	if err != nil{
+func Get(store *Store, url string) (BucketTest, bool) {
+	if store == nil {
 		return BucketTest{}, false
 	}
+
+	store.mu.RLock()
+	res, ok := store.buckets[url]
+	store.mu.RUnlock()
+
+	if !ok {
+		return BucketTest{}, false
+	}
+
 	return res, true
 }
