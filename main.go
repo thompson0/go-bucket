@@ -79,6 +79,7 @@ func main() {
 		fmt.Println("Existe:", result.Exist)
 		fmt.Println("Publico:", result.Public)
 		fmt.Println("Status:", result.StatusCode)
+		printAllowedMethods(result.Methods)
 
 		if !result.Exist {
 			fmt.Println("Bucket não encontrado deseja tentar um bruteforce com nomes parecidos? [S/n]")
@@ -95,6 +96,27 @@ func main() {
 		}
 	}
 
+}
+
+func printAllowedMethods(methods []buckets.MethodResult) {
+	if len(methods) == 0 {
+		fmt.Println("Metodos permitidos: nenhum identificado")
+		return
+	}
+
+	var allowed []string
+	for _, m := range methods {
+		if m.Allowed {
+			allowed = append(allowed, fmt.Sprintf("%s(%d)", m.Method, m.StatusCode))
+		}
+	}
+
+	if len(allowed) == 0 {
+		fmt.Println("Metodos permitidos: nenhum")
+		return
+	}
+
+	fmt.Printf("Metodos permitidos: %s\n", strings.Join(allowed, ", "))
 }
 
 func FormataUrl(input string) string {

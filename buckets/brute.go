@@ -6,24 +6,21 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 )
 
 func Brute(name string, stopOnFound bool, wordlistPath string, numThreads int, timeout int, outputFile string, debug bool) {
-
 	stop := make(chan struct{})
 	var path string
 	var threads int
 
 	wordlistPath = strings.TrimSpace(wordlistPath)
 
-	// Se wordlistPath não foi fornecido, pedir ao usuário
 	if wordlistPath == "" {
 		fmt.Print("Digite o caminho da wordlist: ")
 		fmt.Scan(&path)
-
 		fmt.Print("Digite a quantidade de threads: ")
 		fmt.Scan(&threads)
 	} else {
@@ -61,7 +58,7 @@ func Brute(name string, stopOnFound bool, wordlistPath string, numThreads int, t
 		OutFile:     outFile,
 		Stop:        stop,
 		Debug:       debug,
-		Name: 		 normalizeBucketName(name),
+		Name:        normalizeBucketName(name),
 	}
 
 	for i := 0; i < threads; i++ {
@@ -128,7 +125,6 @@ func sanitizeBucketPart(input string) string {
 			lastSep = false
 			continue
 		}
-
 		if !lastSep {
 			b.WriteByte('-')
 			lastSep = true
@@ -150,7 +146,6 @@ func isValidBucketName(name string) bool {
 		if !isLetter && !isNumber && !isSeparator {
 			return false
 		}
-
 		if (i == 0 || i == len(name)-1) && !isLetter && !isNumber {
 			return false
 		}
@@ -180,69 +175,78 @@ func isValidBucketName(name string) bool {
 
 func generateVariants(name, word string) []string {
 	separators := []string{"-", ".", ""}
-    seen := make(map[string]struct{})
-    var variants []string
+	seen := make(map[string]struct{})
+	var variants []string
 
-    add := func(s string) {
+	add := func(s string) {
 		s = sanitizeBucketPart(s)
 		if s == "" || !isValidBucketName(s) {
 			return
 		}
-        if _, ok := seen[s]; !ok {
-            seen[s] = struct{}{}
-            variants = append(variants, s)
-        }
-    }
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			variants = append(variants, s)
+		}
+	}
 
-    for _, sep := range separators {
-        add(name + sep + word) 
-        add(word + sep + name) 
-    }
+	for _, sep := range separators {
+		add(name + sep + word)
+		add(word + sep + name)
+	}
 
-    return variants
-} 
+	return variants
+}
+
+func writeResult(ctx *BruteContext, line string) {
+	fmt.Println(line)
+	if ctx.OutFile != nil {
+		fmt.Fprintln(ctx.OutFile, line)
+	}
+}
 
 func worker(wg *sync.WaitGroup, jobs <-chan string, ctx *BruteContext) {
-    defer wg.Done()
-    for word := range jobs {
-        select {
-        case <-ctx.Stop:
-            return
-        default:
-            variants := generateVariants(ctx.Name, word)
+	defer wg.Done()
+	for word := range jobs {
+		select {
+		case <-ctx.Stop:
+			return
+		default:
+			variants := generateVariants(ctx.Name, word)
 			if len(variants) == 0 {
 				if ctx.Debug {
-					fmt.Printf("[DEBUG] ignorando entrada invalida da wordlist: %q\n", word)
+					fmt.Printf("[DEBUG] ignorando entrada inválida da wordlist: %q\n", word)
 				}
 				continue
 			}
-            for _, bucket := range variants {
-                select {
-                case <-ctx.Stop:
-                    return
-                default:
-                    url := fmt.Sprintf("https://%s.s3.amazonaws.com/", bucket)
-                    result := CheckBucket(url, ctx.Debug)
-                    if result.Exist {
-                        msg := fmt.Sprintf("[ACHEI] %s", url)
-                        fmt.Println(msg)
-					
-                        if ctx.OutFile != nil {
-                            fmt.Fprintln(ctx.OutFile, msg)
-                        }
-				
-                        if ctx.StopOnFound {
+
+			for _, bucket := range variants {
+				select {
+				case <-ctx.Stop:
+					return
+				default:
+					targetURL := fmt.Sprintf("https://%s.s3.amazonaws.com/", bucket)
+					result := CheckBucket(targetURL, ctx.Debug)
+
+					if result.Exist {
+						writeResult(ctx, fmt.Sprintf("[ACHEI] %s | Region: %s", targetURL, result.Region))
+
+						for _, m := range result.Methods {
+							sym := "✗"
+							if m.Allowed {
+								sym = "✓"
+							}
+							writeResult(ctx, fmt.Sprintf("  %s %-8s %d", sym, m.Method, m.StatusCode))
+						}
+
+						if ctx.StopOnFound {
 							ctx.StopOnce.Do(func() { close(ctx.Stop) })
-                            return
-                        }
-                    } else
-					{
-						msg := fmt.Sprintf("[NÃO ENCONTRADO] %s", url)
-						fmt.Println(msg)	
+							return
+						}
+					} else {
+						fmt.Printf("[NÃO ENCONTRADO] %s\n", targetURL)
 					}
-				
-                }
-            }
-        }
-    }
+				}
+			}
+		}
+	}
 }
