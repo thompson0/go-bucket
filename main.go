@@ -1,15 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"strings"
 	"net/url"
 	"go-bucket/buckets"
+	"go-bucket/db"
 	"flag"
+	"os"
 )
 
 func main() {
-	var url string
 	var bruteforce string
 	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
 	var alvo = flag.String("u", "", "URL alvo para buscar")
@@ -19,6 +21,12 @@ func main() {
 	var output = flag.String("output", "", "Arquivo de saída para resultados")
 	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
 	flag.Parse()
+
+	store, err := db.Init()
+	if err != nil {
+		fmt.Println("Erro ao iniciar store em memoria:", err)
+		return
+	}
 
 	if  *stopOnFound {
 		fmt.Println("Modo stop ativado")
@@ -30,30 +38,61 @@ func main() {
 		return
 	}
 
-	fmt.Println("Digite o nome do site que deseja buscar o Bucket")
-	fmt.Scan(&url)
-
-	url  = FormataUrl(url)
-    result := buckets.CheckBucket(url, *debug)
-
-    if result.Err != nil {
-        fmt.Println("Erro:", result.Err)
-        return
-    }
-
-    fmt.Println("Existe:", result.Exist)
-    fmt.Println("Publico:", result.Public)
-    fmt.Println("Status:", result.StatusCode)
-
-	if result.Exist == false{
-		fmt.Println("Bucket não encontrado deseja tentar um bruteforce com nomes parecidos? [S/n]")
-		fmt.Scan(&bruteforce)
-
-		if strings.ToLower(bruteforce) == "s" {
-			buckets.Brute(url, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Println("Digite o nome do site que deseja buscar o Bucket")
+		input, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			fmt.Println("Erro ao ler entrada:", readErr)
+			return
 		}
-		
 
+		input = strings.TrimSpace(input)
+		if input == "" {
+			continue
+		}
+
+		url := NormalizeBucketURL(input)
+
+		if cached, ok := db.Get(store, url); ok {
+			fmt.Println("Resultado recuperado da memoria")
+			fmt.Println("Existe:", cached.Exist)
+			fmt.Println("Publico:", cached.Public)
+			fmt.Println("Status:", cached.StatusCode)
+			continue
+		}
+
+		result := buckets.CheckBucket(url, *debug)
+		if result.Err != nil {
+			fmt.Println("Erro:", result.Err)
+			continue
+		}
+
+		db.Save(store, url, db.BucketTest{
+			Exist:      result.Exist,
+			Public:     result.Public,
+			StatusCode: result.StatusCode,
+			Region:     result.Region,
+		})
+		fmt.Println("Resultado salvo em memoria")
+
+		fmt.Println("Existe:", result.Exist)
+		fmt.Println("Publico:", result.Public)
+		fmt.Println("Status:", result.StatusCode)
+
+		if !result.Exist {
+			fmt.Println("Bucket não encontrado deseja tentar um bruteforce com nomes parecidos? [S/n]")
+			resp, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				fmt.Println("Erro ao ler entrada:", readErr)
+				continue
+			}
+
+			bruteforce = strings.TrimSpace(strings.ToLower(resp))
+			if bruteforce == "" || bruteforce == "s" {
+				buckets.Brute(url, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+			}
+		}
 	}
 
 }
@@ -77,4 +116,19 @@ func FormataUrl(input string) string {
 
 	// fallback
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/", u.Host)
+}
+
+func NormalizeBucketURL(input string) string {
+	formatted := FormataUrl(input)
+	formatted = strings.TrimSpace(formatted)
+
+	u, err := url.Parse(formatted)
+	if err != nil || u.Host == "" {
+		return formatted
+	}
+
+	host := strings.ToLower(strings.TrimSpace(u.Host))
+	host = strings.TrimSuffix(host, "/")
+
+	return fmt.Sprintf("https://%s/", host)
 }
