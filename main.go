@@ -16,6 +16,14 @@ func main() {
 
 	draw.BucketDraw()
 
+	flag.Usage = func() {
+	fmt.Println("S3 Bucket Scanner")
+	fmt.Println("")
+	fmt.Println("Uso:")
+	fmt.Println("  go run main.go -u <alvo> -w <wordlist> [opções]")
+	fmt.Println("")
+	flag.PrintDefaults()
+}
 	var bruteforce string
 	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
 	var alvo = flag.String("u", "", "URL alvo para buscar")
