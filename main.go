@@ -2,14 +2,13 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
-	"strings"
-	"net/url"
 	"go-bucket/buckets"
 	"go-bucket/db"
 	"go-bucket/draw"
-	"flag"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -17,13 +16,13 @@ func main() {
 	draw.BucketDraw()
 
 	flag.Usage = func() {
-	fmt.Println("S3 Bucket Scanner")
-	fmt.Println("")
-	fmt.Println("Uso:")
-	fmt.Println("  go run main.go -u <alvo> -w <wordlist> [opções]")
-	fmt.Println("")
-	flag.PrintDefaults()
-}
+		fmt.Println("Bucket Scanner")
+		fmt.Println("")
+		fmt.Println("Uso:")
+		fmt.Println("  go run main.go -u <alvo> -w <wordlist> -provider <aws|azure> [opções]")
+		fmt.Println("")
+		flag.PrintDefaults()
+	}
 	var bruteforce string
 	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
 	var alvo = flag.String("u", "", "URL alvo para buscar")
@@ -32,7 +31,14 @@ func main() {
 	var timeout = flag.Int("timeout", 30, "Timeout em segundos")
 	var output = flag.String("output", "", "Arquivo de saída para resultados")
 	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
+	var providerFlag = flag.String("provider", "aws", "Provedor alvo: aws ou azure")
 	flag.Parse()
+
+	provider, err := buckets.ParseProvider(*providerFlag)
+	if err != nil {
+		fmt.Println("Erro:", err)
+		return
+	}
 
 	store, err := db.Init()
 	if err != nil {
@@ -40,13 +46,13 @@ func main() {
 		return
 	}
 
-	if  *stopOnFound {
+	if *stopOnFound {
 		fmt.Println("Modo stop ativado")
 	}
 
 	if *alvo != "" && *wordlist != "" {
-		alvo := FormataUrl(*alvo)
-		buckets.Brute(alvo, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+		alvo := buckets.FormatBucketURL(*alvo, provider)
+		buckets.Brute(alvo, provider, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
 		return
 	}
 
@@ -64,7 +70,7 @@ func main() {
 			continue
 		}
 
-		url := NormalizeBucketURL(input)
+		url := buckets.NormalizeBucketURL(input, provider)
 
 		if cached, ok := db.Get(store, url); ok {
 			fmt.Println("Resultado recuperado da memoria")
@@ -74,7 +80,7 @@ func main() {
 			continue
 		}
 
-		result := buckets.CheckBucket(url, *debug)
+		result := buckets.CheckBucket(url, provider, *debug)
 		if result.Err != nil {
 			fmt.Println("Erro:", result.Err)
 			continue
@@ -103,7 +109,7 @@ func main() {
 
 			bruteforce = strings.TrimSpace(strings.ToLower(resp))
 			if bruteforce == "" || bruteforce == "s" {
-				buckets.Brute(url, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+				buckets.Brute(url, provider, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
 			}
 		}
 	}
@@ -129,40 +135,4 @@ func printAllowedMethods(methods []buckets.MethodResult) {
 	}
 
 	fmt.Printf("Metodos permitidos: %s\n", strings.Join(allowed, ", "))
-}
-
-func FormataUrl(input string) string {
-	input = strings.TrimSpace(input)
-
-	if strings.Contains(input, ".s3.amazonaws.com") {
-		return input
-	}
-
-	if !strings.HasPrefix(input, "http://") && !strings.HasPrefix(input, "https://") {
-		input = "http://" + input
-	}
-
-	u, err := url.Parse(input)
-	if err != nil {
-		
-		return fmt.Sprintf("https://%s.s3.amazonaws.com/", input)
-	}
-
-	// fallback
-	return fmt.Sprintf("https://%s.s3.amazonaws.com/", u.Host)
-}
-
-func NormalizeBucketURL(input string) string {
-	formatted := FormataUrl(input)
-	formatted = strings.TrimSpace(formatted)
-
-	u, err := url.Parse(formatted)
-	if err != nil || u.Host == "" {
-		return formatted
-	}
-
-	host := strings.ToLower(strings.TrimSpace(u.Host))
-	host = strings.TrimSuffix(host, "/")
-
-	return fmt.Sprintf("https://%s/", host)
 }

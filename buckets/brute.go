@@ -3,7 +3,6 @@ package buckets
 import (
 	"bufio"
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -11,7 +10,7 @@ import (
 	"time"
 )
 
-func Brute(name string, stopOnFound bool, wordlistPath string, numThreads int, timeout int, outputFile string, debug bool) {
+func Brute(name string, provider Provider, stopOnFound bool, wordlistPath string, numThreads int, timeout int, outputFile string, debug bool) {
 	stop := make(chan struct{})
 	var path string
 	var threads int
@@ -58,7 +57,8 @@ func Brute(name string, stopOnFound bool, wordlistPath string, numThreads int, t
 		OutFile:     outFile,
 		Stop:        stop,
 		Debug:       debug,
-		Name:        normalizeBucketName(name),
+		Provider:    provider,
+		Name:        ResourceName(name, provider),
 	}
 
 	for i := 0; i < threads; i++ {
@@ -81,30 +81,9 @@ type BruteContext struct {
 	OutFile     *os.File
 	Stop        chan struct{}
 	StopOnce    sync.Once
+	Provider    Provider
 	Name        string
 	Debug       bool
-}
-
-func normalizeBucketName(input string) string {
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return input
-	}
-
-	if u, err := url.Parse(input); err == nil && u.Host != "" {
-		input = u.Host
-	}
-
-	input = strings.TrimPrefix(input, "http://")
-	input = strings.TrimPrefix(input, "https://")
-	input = strings.TrimSuffix(input, "/")
-
-	if idx := strings.Index(input, "/"); idx != -1 {
-		input = input[:idx]
-	}
-
-	input = strings.TrimSuffix(input, ".s3.amazonaws.com")
-	return strings.ToLower(input)
 }
 
 func sanitizeBucketPart(input string) string {
@@ -224,8 +203,8 @@ func worker(wg *sync.WaitGroup, jobs <-chan string, ctx *BruteContext) {
 				case <-ctx.Stop:
 					return
 				default:
-					targetURL := fmt.Sprintf("https://%s.s3.amazonaws.com/", bucket)
-					result := CheckBucket(targetURL, ctx.Debug)
+					targetURL := ctx.Provider.ResourceURL(bucket)
+					result := CheckBucket(targetURL, ctx.Provider, ctx.Debug)
 
 					if result.Exist {
 						writeResult(ctx, fmt.Sprintf("[ACHEI] %s | Region: %s", targetURL, result.Region))

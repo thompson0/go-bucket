@@ -26,12 +26,11 @@ var httpMethods = []string{
 	"OPTIONS", "PATCH", "POST",
 }
 
-func CheckBucket(rawURL string, debug bool) BucketTest {
+func CheckBucket(rawURL string, provider Provider, debug bool) BucketTest {
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 	}
 
-	// HEAD primeiro para checar existência
 	headReq, err := http.NewRequest("HEAD", rawURL, nil)
 	if err != nil {
 		return BucketTest{Err: err}
@@ -75,7 +74,6 @@ func CheckBucket(rawURL string, debug bool) BucketTest {
 		return result
 	}
 
-	// Testa todos os métodos no bucket encontrado
 	for _, method := range httpMethods {
 		req, err := http.NewRequest(method, rawURL, nil)
 		if err != nil {
