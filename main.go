@@ -57,6 +57,23 @@ func main() {
 	}
 
 	reader := bufio.NewReader(os.Stdin)
+
+	// Pergunta inicial sobre DNS resolver
+	fmt.Println("")
+	fmt.Println("Deseja resolver um domínio para detectar se é um bucket/storage? [S/n]")
+	dnsResp, _ := reader.ReadString('\n')
+	if strings.TrimSpace(strings.ToLower(dnsResp)) == "s" || strings.TrimSpace(dnsResp) == "" {
+		fmt.Print("Digite o domínio para resolver: ")
+		dominio, _ := reader.ReadString('\n')
+		dominio = strings.TrimSpace(dominio)
+		if dominio != "" {
+			fmt.Printf("\n[*] Resolvendo %s...\n\n", dominio)
+			dnsResult := buckets.DnsResolver(dominio, *debug)
+			printDNSResolverResult(dnsResult)
+		}
+	}
+
+	fmt.Println("")
 	for {
 		fmt.Println("Digite o nome do site que deseja buscar o Bucket")
 		input, readErr := reader.ReadString('\n')
@@ -135,4 +152,22 @@ func printAllowedMethods(methods []buckets.MethodResult) {
 	}
 
 	fmt.Printf("Metodos permitidos: %s\n", strings.Join(allowed, ", "))
+}
+
+func printDNSResolverResult(result buckets.DNSResolverResult) {
+	fmt.Println("=== RESULTADO DA RESOLUÇÃO DNS ===")
+
+	if result.IsReachable {
+		fmt.Printf("✓ Acessível como storage\n")
+		fmt.Printf("  Provider: %s\n", result.Provider)
+		fmt.Printf("  Método: %s\n", result.Method)
+		fmt.Printf("  Detalhes: %s\n", result.Details)
+	} else {
+		fmt.Printf("✗ Não identificado como storage\n")
+		if result.Error != "" {
+			fmt.Printf("  Motivo: %s\n", result.Error)
+		}
+	}
+
+	fmt.Println("===================================\n")
 }

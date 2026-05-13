@@ -4,16 +4,11 @@ import (
 	"fmt"
 )
 
-func takeover(){
+func Takeover() {
 	fmt.Println("Teste")
 }
 
-func CriarBucket(){
-	fmt.Println("Teste")
-
-}
-
-func dnsresolver(){
+func CriarBucket(provider string, url string) {
 	fmt.Println("Teste")
 
 }
