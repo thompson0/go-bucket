@@ -31,6 +31,7 @@ func main() {
 	var timeout = flag.Int("timeout", 30, "Timeout em segundos")
 	var output = flag.String("output", "", "Arquivo de saída para resultados")
 	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
+	var dns = flag.String("dns", "", "Domínio para resolver e detectar se é um bucket/storage")
 	var providerFlag = flag.String("provider", "aws", "Provedor alvo: aws ou azure")
 	flag.Parse()
 
@@ -50,15 +51,29 @@ func main() {
 		fmt.Println("Modo stop ativado")
 	}
 
+	if *dns != "" {
+		fmt.Printf("[*] Resolvendo %s...\n\n", *dns)
+		dnsResult := buckets.DnsResolver(*dns, *debug)
+		printDNSResolverResult(dnsResult)
+		return
+	}
+
 	if *alvo != "" && *wordlist != "" {
 		alvo := buckets.FormatBucketURL(*alvo, provider)
+
+		if !*debug {
+			totalLines := countWordlistLines(*wordlist)
+			if totalLines > 0 {
+				draw.StartProgessbar(totalLines)
+			}
+		}
+
 		buckets.Brute(alvo, provider, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
 		return
 	}
 
 	reader := bufio.NewReader(os.Stdin)
 
-	// Pergunta inicial sobre DNS resolver
 	fmt.Println("")
 	fmt.Println("Deseja resolver um domínio para detectar se é um bucket/storage? [S/n]")
 	dnsResp, _ := reader.ReadString('\n')
@@ -170,4 +185,19 @@ func printDNSResolverResult(result buckets.DNSResolverResult) {
 	}
 
 	fmt.Println("===================================\n")
+}
+
+func countWordlistLines(wordlistPath string) int {
+	file, err := os.Open(wordlistPath)
+	if err != nil {
+		return 0
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	count := 0
+	for scanner.Scan() {
+		count++
+	}
+	return count
 }
