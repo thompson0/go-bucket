@@ -67,18 +67,30 @@ func Brute(name string, provider Provider, stopOnFound bool, wordlistPath string
 	}
 
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		jobs <- scanner.Text()
+		select {
+		case <-stop:
+			close(jobs)
+			wg.Wait()
+			return
+		case jobs <- scanner.Text():
+		}
 	}
 
 	close(jobs)
 	wg.Wait()
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Erro ao ler wordlist:", err)
+	}
 }
 
 type BruteContext struct {
 	Timeout     time.Duration
 	StopOnFound bool
 	OutFile     *os.File
+	WriteMu     sync.Mutex
 	Stop        chan struct{}
 	StopOnce    sync.Once
 	Provider    Provider
@@ -177,6 +189,9 @@ func generateVariants(name, word string) []string {
 }
 
 func writeResult(ctx *BruteContext, line string) {
+	ctx.WriteMu.Lock()
+	defer ctx.WriteMu.Unlock()
+
 	fmt.Println(line)
 	if ctx.OutFile != nil {
 		fmt.Fprintln(ctx.OutFile, line)
@@ -204,7 +219,7 @@ func worker(wg *sync.WaitGroup, jobs <-chan string, ctx *BruteContext) {
 					return
 				default:
 					targetURL := ctx.Provider.ResourceURL(bucket)
-					result := CheckBucket(targetURL, ctx.Provider, ctx.Debug)
+					result := CheckBucketWithTimeout(targetURL, ctx.Provider, ctx.Timeout, ctx.Debug)
 
 					if result.Exist {
 						writeResult(ctx, fmt.Sprintf("[ACHEI] %s | Region: %s", targetURL, result.Region))
@@ -221,8 +236,12 @@ func worker(wg *sync.WaitGroup, jobs <-chan string, ctx *BruteContext) {
 							ctx.StopOnce.Do(func() { close(ctx.Stop) })
 							return
 						}
+					} else if result.Err != nil {
+						if ctx.Debug {
+							writeResult(ctx, fmt.Sprintf("[ERRO] %s | %v", targetURL, result.Err))
+						}
 					} else {
-						fmt.Printf("[NÃO ENCONTRADO] %s\n", targetURL)
+						writeResult(ctx, fmt.Sprintf("[NÃO ENCONTRADO] %s", targetURL))
 					}
 				}
 			}

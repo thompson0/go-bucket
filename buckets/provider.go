@@ -11,6 +11,7 @@ type Provider string
 const (
 	ProviderAWS   Provider = "aws"
 	ProviderAzure Provider = "azure"
+	ProviderGCP   Provider = "gcp"
 )
 
 func ParseProvider(input string) (Provider, error) {
@@ -19,6 +20,8 @@ func ParseProvider(input string) (Provider, error) {
 		return ProviderAWS, nil
 	case ProviderAzure:
 		return ProviderAzure, nil
+	case ProviderGCP:
+		return ProviderGCP, nil
 	default:
 		return "", fmt.Errorf("provedor inválido: %s", input)
 	}
@@ -28,6 +31,8 @@ func (p Provider) hostSuffix() string {
 	switch p {
 	case ProviderAzure:
 		return ".blob.core.windows.net"
+	case ProviderGCP:
+		return ".storage.googleapis.com"
 	default:
 		return ".s3.amazonaws.com"
 	}

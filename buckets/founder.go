@@ -39,8 +39,16 @@ var httpMethods = []string{
 }
 
 func CheckBucket(rawURL string, provider Provider, debug bool) BucketTest {
+	return CheckBucketWithTimeout(rawURL, provider, 5*time.Second, debug)
+}
+
+func CheckBucketWithTimeout(rawURL string, provider Provider, timeout time.Duration, debug bool) BucketTest {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: timeout,
 	}
 
 	headReq, err := http.NewRequest("HEAD", rawURL, nil)

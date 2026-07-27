@@ -19,7 +19,7 @@ func main() {
 		fmt.Println("Bucket Scanner")
 		fmt.Println("")
 		fmt.Println("Uso:")
-		fmt.Println("  go run main.go -u <alvo> -w <wordlist> -provider <aws|azure> [opções]")
+		fmt.Println("  go run main.go -u <alvo> -w <wordlist> -provider <aws|azure|gcp> [opções]")
 		fmt.Println("")
 		flag.PrintDefaults()
 	}
@@ -32,7 +32,7 @@ func main() {
 	var output = flag.String("output", "", "Arquivo de saída para resultados")
 	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
 	var dns = flag.String("dns", "", "Domínio para resolver e detectar se é um bucket/storage")
-	var providerFlag = flag.String("provider", "aws", "Provedor alvo: aws ou azure")
+	var providerFlag = flag.String("provider", "aws", "Provedor alvo: aws, azure ou gcp")
 	flag.Parse()
 
 	provider, err := buckets.ParseProvider(*providerFlag)
