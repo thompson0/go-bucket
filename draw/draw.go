@@ -1,13 +1,11 @@
 package draw
 
-import(
+import (
 	"fmt"
-	"github.com/schollz/progressbar/v3"
-   "time"
 )
 
-func BucketDraw(){
-	fmt.Println(`
+func BucketDraw() {
+	fmt.Print(`
 
 
  _____ ____        ____  _     ____  _  __ _____ _____
@@ -21,15 +19,4 @@ func BucketDraw(){
 ----------------------------------------------------------------------------------------------------------
 	
 `)
-}
-func StartProgessbar(total int) {
-   if total <= 0 {
-      total = 100
-   }
-
-   bar := progressbar.Default(int64(total))
-   for atribute := 0; atribute < total; atribute++ {
-      _ = bar.Add(1)
-      time.Sleep(40 * time.Millisecond)
-   }
 }

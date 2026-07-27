@@ -64,7 +64,7 @@ func main() {
 		if !*debug {
 			totalLines := countWordlistLines(*wordlist)
 			if totalLines > 0 {
-				draw.StartProgessbar(totalLines)
+				fmt.Printf("[*] Wordlist carregada com %d entradas\n", totalLines)
 			}
 		}
 
@@ -184,7 +184,8 @@ func printDNSResolverResult(result buckets.DNSResolverResult) {
 		}
 	}
 
-	fmt.Println("===================================\n")
+	fmt.Println("===================================")
+	fmt.Println()
 }
 
 func countWordlistLines(wordlistPath string) int {
