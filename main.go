@@ -7,6 +7,7 @@ import (
 	"go-bucket/buckets"
 	"go-bucket/db"
 	"go-bucket/draw"
+	"go-bucket/takeover"
 	"os"
 	"strings"
 )
@@ -23,7 +24,6 @@ func main() {
 		fmt.Println("")
 		flag.PrintDefaults()
 	}
-	var bruteforce string
 	var stopOnFound = flag.Bool("stop-on-found", false, "Parar ao encontrar um bucket")
 	var alvo = flag.String("u", "", "URL alvo para buscar")
 	var wordlist = flag.String("w", "", "Caminho da wordlist")
@@ -33,6 +33,10 @@ func main() {
 	var debug = flag.Bool("debug", false, "Mostrar debug de cada requisicao")
 	var dns = flag.String("dns", "", "Domínio para resolver e detectar se é um bucket/storage")
 	var providerFlag = flag.String("provider", "aws", "Provedor alvo: aws, azure ou gcp")
+	var takeoverFlag = flag.String("takeover", "", "Verificar se um domínio/nome pode ser reivindicado (takeover)")
+	var accessKey = flag.String("access-key", "", "Access key AWS (ou deixe vazio para digitar)")
+	var secretKey = flag.String("secret", "", "Secret key AWS (ou deixe vazio para digitar)")
+	var region = flag.String("region", "us-east-1", "Região AWS para criar o bucket")
 	flag.Parse()
 
 	provider, err := buckets.ParseProvider(*providerFlag)
@@ -47,6 +51,8 @@ func main() {
 		return
 	}
 
+	reader := bufio.NewReader(os.Stdin)
+
 	if *stopOnFound {
 		fmt.Println("Modo stop ativado")
 	}
@@ -55,6 +61,16 @@ func main() {
 		fmt.Printf("[*] Resolvendo %s...\n\n", *dns)
 		dnsResult := buckets.DnsResolver(*dns, *debug)
 		printDNSResolverResult(dnsResult)
+		return
+	}
+
+	if *takeoverFlag != "" {
+		fmt.Printf("[*] Verificando takeover de %s...\n\n", *takeoverFlag)
+		tr := buckets.DetectTakeover(*takeoverFlag, provider, *debug)
+		printTakeoverResult(tr)
+		if tr.Vulnerable && tr.Provider == buckets.ProviderAWS {
+			offerCreateBucket(reader, tr.Provider, tr.BucketName, *accessKey, *secretKey, *region, *debug)
+		}
 		return
 	}
 
@@ -71,8 +87,6 @@ func main() {
 		buckets.Brute(alvo, provider, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
 		return
 	}
-
-	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("")
 	fmt.Println("Deseja resolver um domínio para detectar se é um bucket/storage? [S/n]")
@@ -139,9 +153,26 @@ func main() {
 				continue
 			}
 
-			bruteforce = strings.TrimSpace(strings.ToLower(resp))
-			if bruteforce == "" || bruteforce == "s" {
+			resp = strings.TrimSpace(strings.ToLower(resp))
+			if resp == "" || resp == "s" {
 				buckets.Brute(url, provider, *stopOnFound, *wordlist, *threads, *timeout, *output, *debug)
+			}
+
+			fmt.Println("")
+			fmt.Println("Deseja verificar takeover do nome informado? [S/n]")
+			takeoverResp, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				fmt.Println("Erro ao ler entrada:", readErr)
+				continue
+			}
+
+			takeoverResp = strings.TrimSpace(strings.ToLower(takeoverResp))
+			if takeoverResp == "" || takeoverResp == "s" {
+				tr := buckets.DetectTakeover(input, provider, *debug)
+				printTakeoverResult(tr)
+				if tr.Vulnerable && tr.Provider == buckets.ProviderAWS {
+					offerCreateBucket(reader, tr.Provider, tr.BucketName, *accessKey, *secretKey, *region, *debug)
+				}
 			}
 		}
 	}
@@ -186,6 +217,74 @@ func printDNSResolverResult(result buckets.DNSResolverResult) {
 
 	fmt.Println("===================================")
 	fmt.Println()
+}
+
+func printTakeoverResult(result buckets.TakeoverResult) {
+	fmt.Println("=== RESULTADO DO TAKEOVER ===")
+	fmt.Printf("  Domínio: %s\n", result.Domain)
+	if result.CNAME != "" {
+		fmt.Printf("  CNAME: %s\n", result.CNAME)
+	}
+	fmt.Printf("  Provider: %s\n", result.Provider)
+	if result.BucketName != "" {
+		fmt.Printf("  Bucket: %s\n", result.BucketName)
+	}
+	if result.StatusCode != 0 {
+		fmt.Printf("  Status: %d\n", result.StatusCode)
+	}
+	if result.Vulnerable {
+		fmt.Println("  Veredito: VULNERÁVEL")
+	} else {
+		fmt.Println("  Veredito: NÃO vulnerável")
+	}
+	if result.Reason != "" {
+		fmt.Printf("  Motivo: %s\n", result.Reason)
+	}
+	fmt.Println("==================================")
+	fmt.Println()
+}
+
+// resolveCredentials usa as flags quando informadas; caso contrário pede no terminal.
+func resolveCredentials(reader *bufio.Reader, accessKey, secretKey, region string) takeover.Credentials {
+	if accessKey == "" {
+		fmt.Print("Digite a access key: ")
+		accessKey, _ = reader.ReadString('\n')
+	}
+	if secretKey == "" {
+		fmt.Print("Digite a secret key: ")
+		secretKey, _ = reader.ReadString('\n')
+	}
+	if region == "" {
+		fmt.Print("Digite a região (padrão us-east-1): ")
+		region, _ = reader.ReadString('\n')
+		if strings.TrimSpace(region) == "" {
+			region = "us-east-1"
+		}
+	}
+
+	return takeover.Credentials{
+		AccessKey: strings.TrimSpace(accessKey),
+		SecretKey: strings.TrimSpace(secretKey),
+		Region:    strings.TrimSpace(region),
+	}
+}
+
+// offerCreateBucket confirma com o usuário e chama o PoC de criação.
+func offerCreateBucket(reader *bufio.Reader, provider buckets.Provider, bucketName string, accessKey, secretKey, region string, debug bool) {
+	if bucketName == "" {
+		return
+	}
+
+	fmt.Println("")
+	fmt.Println("Bucket vulnerável identificado. Deseja reivindicá-lo (criar) agora? [S/n]")
+	resp, _ := reader.ReadString('\n')
+	resp = strings.TrimSpace(strings.ToLower(resp))
+	if resp == "s" || resp == "" {
+		creds := resolveCredentials(reader, accessKey, secretKey, region)
+		if err := takeover.CriarBucket(provider, bucketName, creds, debug); err != nil {
+			fmt.Println("Erro ao criar bucket:", err)
+		}
+	}
 }
 
 func countWordlistLines(wordlistPath string) int {
