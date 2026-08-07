@@ -155,25 +155,18 @@ func DnsResolver(dominio string, debug bool) DNSResolverResult {
 	if err == nil && cname != "" {
 		cname = strings.ToLower(cname)
 
-		if strings.Contains(cname, "amazonaws.com") {
+		if p, ok := storageProviderFromCNAME(cname); ok {
 			result.IsReachable = true
-			result.Provider = "aws"
+			result.Provider = string(p)
 			result.Method = "DNS CNAME"
-			result.Details = fmt.Sprintf("AWS S3 CNAME: %s", cname)
-			return result
-		}
-		if strings.Contains(cname, "googleapis.com") || strings.Contains(cname, "commondatastorage") {
-			result.IsReachable = true
-			result.Provider = "gcp"
-			result.Method = "DNS CNAME"
-			result.Details = fmt.Sprintf("Google Cloud Storage CNAME: %s", cname)
-			return result
-		}
-		if strings.Contains(cname, "blob.core.windows.net") || strings.Contains(cname, "azureedge.net") {
-			result.IsReachable = true
-			result.Provider = "azure"
-			result.Method = "DNS CNAME"
-			result.Details = fmt.Sprintf("Azure Blob CNAME: %s", cname)
+			switch p {
+			case ProviderAWS:
+				result.Details = fmt.Sprintf("AWS S3 CNAME: %s", cname)
+			case ProviderGCP:
+				result.Details = fmt.Sprintf("Google Cloud Storage CNAME: %s", cname)
+			case ProviderAzure:
+				result.Details = fmt.Sprintf("Azure Blob CNAME: %s", cname)
+			}
 			return result
 		}
 	}
@@ -186,6 +179,23 @@ func DnsResolver(dominio string, debug bool) DNSResolverResult {
 
 	result.Error = "Não foi possível resolver o domínio como bucket de storage"
 	return result
+}
+
+// storageProviderFromCNAME identifica o provedor de storage pelo destino do CNAME.
+func storageProviderFromCNAME(cname string) (Provider, bool) {
+	cname = strings.ToLower(cname)
+
+	if strings.Contains(cname, "amazonaws.com") {
+		return ProviderAWS, true
+	}
+	if strings.Contains(cname, "googleapis.com") || strings.Contains(cname, "commondatastorage") {
+		return ProviderGCP, true
+	}
+	if strings.Contains(cname, "blob.core.windows.net") || strings.Contains(cname, "azureedge.net") {
+		return ProviderAzure, true
+	}
+
+	return "", false
 }
 
 // checkViaHTTP verifica o provedor através de headers HTTP
