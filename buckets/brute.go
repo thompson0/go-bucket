@@ -125,6 +125,11 @@ func sanitizeBucketPart(input string) string {
 	return strings.Trim(b.String(), "-.")
 }
 
+// ValidBucketName exporta a validação de nome de bucket para outros pacotes.
+func ValidBucketName(name string) bool {
+	return isValidBucketName(name)
+}
+
 func isValidBucketName(name string) bool {
 	if len(name) < 3 || len(name) > 63 {
 		return false
